@@ -1,7 +1,7 @@
 bl_info = {
   "name": "OpenSCAD Bridge for Blender",
   "author": "Copilot",
-  "version": (0, 1, 0),
+  "version": (0, 1, 1),
   "blender": (5, 0, 0),
   "location": "View3D > Sidebar > OpenSCAD",
   "description": "Bridge OpenSCAD-like workflow inside Blender",

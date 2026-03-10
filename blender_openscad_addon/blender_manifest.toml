@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "openscad_bridge"
-version = "0.1.0"
+version = "0.1.1"
 name = "OpenSCAD Bridge for Blender"
 tagline = "OpenSCAD-like modeling workflow in Blender"
 maintainer = "Copilot"
