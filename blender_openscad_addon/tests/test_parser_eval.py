@@ -32,6 +32,7 @@ def main():
   count_builtins = run_smoke(root / "sample_builtins.scad")
   count_math_functions = run_smoke(root / "sample_math_functions.scad")
   count_trig_functions = run_smoke(root / "sample_trig_functions.scad")
+  count_conversion = run_smoke(root / "sample_conversion.scad")
   count_hull_minkowski = run_smoke(root / "sample_hull_minkowski.scad")
 
   if (
@@ -46,6 +47,7 @@ def main():
     or count_builtins <= 0
     or count_math_functions <= 0
     or count_trig_functions <= 0
+    or count_conversion <= 0
     or count_hull_minkowski <= 0
   ):
     raise SystemExit(1)

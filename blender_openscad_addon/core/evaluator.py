@@ -202,6 +202,18 @@ def _eval_function_call(expr: FunctionCallExpr, ctx: EvalContext):
       count = int(float(resolved_args[2]))
       return [random.uniform(min_val, max_val) for _ in range(count)]
     return []
+  if expr.name == "bool":
+    if resolved_args:
+      return _truthy(resolved_args[0])
+    return False
+  if expr.name == "int":
+    if resolved_args:
+      return float(int(float(resolved_args[0])))
+    return 0.0
+  if expr.name == "each":
+    if resolved_args and isinstance(resolved_args[0], list):
+      return resolved_args[0]
+    return resolved_args if resolved_args else []
 
   fn = ctx.functions.get(expr.name)
   if fn is None:
