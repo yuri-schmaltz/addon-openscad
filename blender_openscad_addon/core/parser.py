@@ -109,9 +109,14 @@ class Parser:
           continue
         self.expect_symbol(")")
         break
+      filter_expr = None
+      if self.match_keyword("if"):
+        self.expect_symbol("(")
+        filter_expr = self.parse_expression()
+        self.expect_symbol(")")
       expr = self.parse_expression()
       self.expect_symbol("]")
-      return ListComprehensionExpr(bindings=bindings, expr=expr)
+      return ListComprehensionExpr(bindings=bindings, expr=expr, filter_expr=filter_expr)
 
     first = self.parse_expression()
     if self.match_symbol(":"):
@@ -186,14 +191,14 @@ class Parser:
 
   def parse_logical_or(self):
     left = self.parse_logical_and()
-    while self.match_symbol_pair("|", "|"):
+    while self.match_symbol("||"):
       right = self.parse_logical_and()
       left = BinaryExpr(op="||", left=left, right=right)
     return left
 
   def parse_logical_and(self):
     left = self.parse_equality()
-    while self.match_symbol_pair("&", "&"):
+    while self.match_symbol("&&"):
       right = self.parse_equality()
       left = BinaryExpr(op="&&", left=left, right=right)
     return left
@@ -201,11 +206,11 @@ class Parser:
   def parse_equality(self):
     left = self.parse_relational()
     while True:
-      if self.match_symbol_pair("=", "="):
+      if self.match_symbol("=="):
         right = self.parse_relational()
         left = BinaryExpr(op="==", left=left, right=right)
         continue
-      if self.match_symbol_pair("!", "="):
+      if self.match_symbol("!="):
         right = self.parse_relational()
         left = BinaryExpr(op="!=", left=left, right=right)
         continue
@@ -215,11 +220,11 @@ class Parser:
   def parse_relational(self):
     left = self.parse_additive()
     while True:
-      if self.match_symbol_pair("<", "="):
+      if self.match_symbol("<="):
         right = self.parse_additive()
         left = BinaryExpr(op="<=", left=left, right=right)
         continue
-      if self.match_symbol_pair(">", "="):
+      if self.match_symbol(">="):
         right = self.parse_additive()
         left = BinaryExpr(op=">=", left=left, right=right)
         continue

@@ -48,7 +48,29 @@ def tokenize(source: str) -> list[Token]:
     elif m.group("ident") is not None:
       out.append(Token("ident", m.group("ident"), m.start()))
     else:
-      out.append(Token("symbol", m.group("symbol"), m.start()))
+      sym = m.group("symbol")
+      start_idx = m.start()
+      # Handle multi-character operators
+      if sym == "=" and pos < n and source[pos] == "=":
+        out.append(Token("symbol", "==", start_idx))
+        pos += 1
+      elif sym == "!" and pos < n and source[pos] == "=":
+        out.append(Token("symbol", "!=", start_idx))
+        pos += 1
+      elif sym == "<" and pos < n and source[pos] == "=":
+        out.append(Token("symbol", "<=", start_idx))
+        pos += 1
+      elif sym == ">" and pos < n and source[pos] == "=":
+        out.append(Token("symbol", ">=", start_idx))
+        pos += 1
+      elif sym == "&" and pos < n and source[pos] == "&":
+        out.append(Token("symbol", "&&", start_idx))
+        pos += 1
+      elif sym == "|" and pos < n and source[pos] == "|":
+        out.append(Token("symbol", "||", start_idx))
+        pos += 1
+      else:
+        out.append(Token("symbol", sym, start_idx))
 
   out.append(Token("eof", "", n))
   return out

@@ -51,6 +51,7 @@ class RangeExpr(Node):
 class ListComprehensionExpr(Node):
   bindings: list[tuple[str, Any]] = field(default_factory=list)
   expr: Any = None
+  filter_expr: Any = None
 
 
 @dataclass

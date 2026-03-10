@@ -188,7 +188,8 @@ def _resolve_value(value, variables: dict[str, object], ctx: EvalContext | None 
 
     def run_binding(binding_index: int, local_vars: dict[str, object]):
       if binding_index >= len(value.bindings):
-        out.append(_resolve_value(value.expr, local_vars, ctx))
+        if value.filter_expr is None or _truthy(_resolve_value(value.filter_expr, local_vars, ctx)):
+          out.append(_resolve_value(value.expr, local_vars, ctx))
         return
 
       var_name, iterable_expr = value.bindings[binding_index]
