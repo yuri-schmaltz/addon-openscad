@@ -12,6 +12,8 @@ Addon para Blender 5.x+ que implementa um fluxo OpenSCAD-like dentro do Blender.
   - `color()`
   - `include <...>;`, `include "...";`, `use <...>;`, `use "...";`
   - `module nome(params) { ... }` e chamada de modulo
+  - `function nome(params)=expr;` e chamadas em argumentos
+  - expressoes aritmeticas com `+`, `-`, `*`, `/`, `%` e parenteses
 - Preview de geometria em colecao dedicada `OpenSCAD Preview`.
 - Render com aplicacao opcional de boolean modifiers.
 - Export de mesh selecionada para script `.scad` via `polyhedron()`.

@@ -15,6 +15,25 @@ class Program(Node):
 
 
 @dataclass
+class UnaryExpr(Node):
+  op: str
+  value: Any
+
+
+@dataclass
+class BinaryExpr(Node):
+  op: str
+  left: Any
+  right: Any
+
+
+@dataclass
+class FunctionCallExpr(Node):
+  name: str
+  args: list[Any] = field(default_factory=list)
+
+
+@dataclass
 class VarRef(Node):
   name: str
 
@@ -34,6 +53,13 @@ class ModuleDef(Node):
   name: str
   params: list[tuple[str, Any]] = field(default_factory=list)
   body: list[Node] = field(default_factory=list)
+
+
+@dataclass
+class FunctionDef(Node):
+  name: str
+  params: list[tuple[str, Any]] = field(default_factory=list)
+  expr: Any = None
 
 
 @dataclass

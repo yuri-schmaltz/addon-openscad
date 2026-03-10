@@ -5,9 +5,12 @@ from pathlib import Path
 from typing import Callable
 
 from .ast import (
+  BinaryExpr,
   BooleanOp,
   ColorOp,
   EvalItem,
+  FunctionCallExpr,
+  FunctionDef,
   IncludeStmt,
   ModuleCall,
   ModuleDef,
@@ -15,6 +18,7 @@ from .ast import (
   Program,
   RawCall,
   Transform,
+  UnaryExpr,
   UseStmt,
   VarRef,
 )
@@ -24,30 +28,87 @@ from .parser import parse_scad
 @dataclass
 class EvalContext:
   modules: dict[str, ModuleDef] = field(default_factory=dict)
+  functions: dict[str, FunctionDef] = field(default_factory=dict)
   variables: dict[str, object] = field(default_factory=dict)
   source_path: str | None = None
   include_loader: Callable[[str], str] | None = None
   visited_includes: set[str] = field(default_factory=set)
 
 
-def _resolve_value(value, variables: dict[str, object]):
+def _eval_binary(op: str, left, right):
+  if op == "+":
+    return left + right
+  if op == "-":
+    return left - right
+  if op == "*":
+    return left * right
+  if op == "/":
+    return 0.0 if right == 0 else left / right
+  if op == "%":
+    return 0.0 if right == 0 else left % right
+  return 0.0
+
+
+def _eval_function_call(expr: FunctionCallExpr, ctx: EvalContext):
+  resolved_args = [_resolve_value(v, ctx.variables, ctx) for v in expr.args]
+
+  if expr.name == "min":
+    return min(resolved_args) if resolved_args else 0.0
+  if expr.name == "max":
+    return max(resolved_args) if resolved_args else 0.0
+  if expr.name == "abs":
+    return abs(float(resolved_args[0])) if resolved_args else 0.0
+
+  fn = ctx.functions.get(expr.name)
+  if fn is None:
+    return 0.0
+
+  bound_vars = dict(ctx.variables)
+  for idx, (param_name, default_value) in enumerate(fn.params):
+    if idx < len(resolved_args):
+      bound_vars[param_name] = resolved_args[idx]
+    elif default_value is not None:
+      bound_vars[param_name] = _resolve_value(default_value, ctx.variables, ctx)
+    else:
+      bound_vars[param_name] = 0.0
+
+  sub_ctx = EvalContext(
+    modules=ctx.modules,
+    functions=ctx.functions,
+    variables=bound_vars,
+    source_path=ctx.source_path,
+    include_loader=ctx.include_loader,
+    visited_includes=ctx.visited_includes,
+  )
+  return _resolve_value(fn.expr, sub_ctx.variables, sub_ctx)
+
+
+def _resolve_value(value, variables: dict[str, object], ctx: EvalContext | None = None):
   if isinstance(value, VarRef):
     return variables.get(value.name, 0.0)
+  if isinstance(value, UnaryExpr):
+    val = _resolve_value(value.value, variables, ctx)
+    if value.op == "-":
+      return -float(val)
+    return float(val)
+  if isinstance(value, BinaryExpr):
+    left = _resolve_value(value.left, variables, ctx)
+    right = _resolve_value(value.right, variables, ctx)
+    return _eval_binary(value.op, float(left), float(right))
+  if isinstance(value, FunctionCallExpr):
+    if ctx is None:
+      return 0.0
+    return _eval_function_call(value, ctx)
   if isinstance(value, list):
-    return [_resolve_value(v, variables) for v in value]
+    return [_resolve_value(v, variables, ctx) for v in value]
   return value
 
 
-def _resolve_args(args: dict[str, object], variables: dict[str, object]) -> dict[str, object]:
-  return {k: _resolve_value(v, variables) for k, v in args.items()}
-
-
-def _to_float_list(values, variables: dict[str, object]) -> list[float]:
-  resolved = _resolve_value(values, variables)
-  if not isinstance(resolved, list):
+def _to_float_list(values) -> list[float]:
+  if not isinstance(values, list):
     return []
   out: list[float] = []
-  for v in resolved:
+  for v in values:
     if isinstance(v, (int, float)):
       out.append(float(v))
   return out
@@ -69,13 +130,15 @@ def _register_modules_only(program: Program, ctx: EvalContext) -> None:
   for stmt in program.statements:
     if isinstance(stmt, ModuleDef):
       ctx.modules[stmt.name] = stmt
+    if isinstance(stmt, FunctionDef):
+      ctx.functions[stmt.name] = stmt
 
 
 def _eval_node(node, ctx: EvalContext, transform_chain=None, color=None):
   transform_chain = list(transform_chain or [])
 
   if isinstance(node, Primitive):
-    resolved_args = _resolve_args(node.args, ctx.variables)
+    resolved_args = {k: _resolve_value(v, ctx.variables, ctx) for k, v in node.args.items()}
     return EvalItem(
       node_type="primitive",
       primitive=Primitive(kind=node.kind, args=resolved_args),
@@ -84,7 +147,8 @@ def _eval_node(node, ctx: EvalContext, transform_chain=None, color=None):
     )
 
   if isinstance(node, Transform):
-    chain = transform_chain + [(node.kind, _to_float_list(node.values, ctx.variables))]
+    resolved_values = _resolve_value(node.values, ctx.variables, ctx)
+    chain = transform_chain + [(node.kind, _to_float_list(resolved_values))]
     return EvalItem(
       node_type="group",
       transform_chain=transform_chain,
@@ -102,7 +166,7 @@ def _eval_node(node, ctx: EvalContext, transform_chain=None, color=None):
     )
 
   if isinstance(node, ColorOp):
-    rgba = _to_float_list(node.rgba, ctx.variables)
+    rgba = _to_float_list(_resolve_value(node.rgba, ctx.variables, ctx))
     if len(rgba) == 3:
       rgba.append(1.0)
     return EvalItem(
@@ -116,12 +180,16 @@ def _eval_node(node, ctx: EvalContext, transform_chain=None, color=None):
     ctx.modules[node.name] = node
     return EvalItem(node_type="noop", transform_chain=transform_chain)
 
+  if isinstance(node, FunctionDef):
+    ctx.functions[node.name] = node
+    return EvalItem(node_type="noop", transform_chain=transform_chain)
+
   if isinstance(node, ModuleCall):
     mod = ctx.modules.get(node.name)
     if mod is None:
       return EvalItem(node_type="noop", transform_chain=transform_chain)
 
-    call_args = _resolve_args(node.args, ctx.variables)
+    call_args = {k: _resolve_value(v, ctx.variables, ctx) for k, v in node.args.items()}
     bound_vars = dict(ctx.variables)
 
     arg_index = 0
@@ -132,13 +200,14 @@ def _eval_node(node, ctx: EvalContext, transform_chain=None, color=None):
       elif positional_key in call_args:
         bound_vars[param_name] = call_args[positional_key]
       elif default_value is not None:
-        bound_vars[param_name] = _resolve_value(default_value, ctx.variables)
+        bound_vars[param_name] = _resolve_value(default_value, ctx.variables, ctx)
       else:
         bound_vars[param_name] = 0.0
       arg_index += 1
 
     sub_ctx = EvalContext(
       modules=ctx.modules,
+      functions=ctx.functions,
       variables=bound_vars,
       source_path=ctx.source_path,
       include_loader=ctx.include_loader,
@@ -164,6 +233,7 @@ def _eval_node(node, ctx: EvalContext, transform_chain=None, color=None):
 
     sub_ctx = EvalContext(
       modules=ctx.modules,
+      functions=ctx.functions,
       variables=ctx.variables,
       source_path=include_path,
       include_loader=ctx.include_loader,

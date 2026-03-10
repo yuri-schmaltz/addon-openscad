@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from .ast import (
+  BinaryExpr,
   BooleanOp,
   ColorOp,
+  FunctionCallExpr,
+  FunctionDef,
   IncludeStmt,
   ModuleCall,
   ModuleDef,
@@ -10,6 +13,7 @@ from .ast import (
   Program,
   RawCall,
   Transform,
+  UnaryExpr,
   UseStmt,
   VarRef,
 )
@@ -63,13 +67,28 @@ class Parser:
       if self.peek().kind == "symbol" and self.peek().value == "]":
         self.advance()
         break
-      values.append(self.parse_number())
+      values.append(self.parse_value())
       if self.peek().kind == "symbol" and self.peek().value == ",":
         self.advance()
         continue
       self.expect_symbol("]")
       break
     return values
+
+  def parse_call_args_positional(self) -> list[object]:
+    args: list[object] = []
+    self.expect_symbol("(")
+    while True:
+      t = self.peek()
+      if t.kind == "symbol" and t.value == ")":
+        self.advance()
+        break
+
+      args.append(self.parse_value())
+      if self.peek().kind == "symbol" and self.peek().value == ",":
+        self.advance()
+        continue
+    return args
 
   def parse_args(self) -> dict[str, object]:
     args: dict[str, object] = {}
@@ -100,15 +119,51 @@ class Parser:
     return args
 
   def parse_value(self):
+    return self.parse_expression()
+
+  def parse_expression(self):
+    return self.parse_additive()
+
+  def parse_additive(self):
+    left = self.parse_multiplicative()
+    while self.peek().kind == "symbol" and self.peek().value in {"+", "-"}:
+      op = self.advance().value
+      right = self.parse_multiplicative()
+      left = BinaryExpr(op=op, left=left, right=right)
+    return left
+
+  def parse_multiplicative(self):
+    left = self.parse_unary()
+    while self.peek().kind == "symbol" and self.peek().value in {"*", "/", "%"}:
+      op = self.advance().value
+      right = self.parse_unary()
+      left = BinaryExpr(op=op, left=left, right=right)
+    return left
+
+  def parse_unary(self):
+    if self.peek().kind == "symbol" and self.peek().value in {"+", "-"}:
+      op = self.advance().value
+      return UnaryExpr(op=op, value=self.parse_unary())
+    return self.parse_primary()
+
+  def parse_primary(self):
     t = self.peek()
     if t.kind == "number":
       return self.parse_number()
     if t.kind == "string":
       return self.parse_string()
-    if t.kind == "ident":
-      return VarRef(self.advance().value)
     if t.kind == "symbol" and t.value == "[":
       return self.parse_array()
+    if t.kind == "symbol" and t.value == "(":
+      self.advance()
+      expr = self.parse_expression()
+      self.expect_symbol(")")
+      return expr
+    if t.kind == "ident":
+      name = self.advance().value
+      if self.peek().kind == "symbol" and self.peek().value == "(":
+        return FunctionCallExpr(name=name, args=self.parse_call_args_positional())
+      return VarRef(name)
     raise ParseError(f"Valor invalido na posicao {t.index}")
 
   def parse_path_value(self) -> str:
@@ -185,6 +240,14 @@ class Parser:
       body = self.parse_block()
       return ModuleDef(name=module_name, params=params, body=body)
 
+    if name == "function":
+      function_name = self.expect_ident()
+      params = self.parse_module_params()
+      self.expect_symbol("=")
+      expr = self.parse_expression()
+      self.expect_symbol(";")
+      return FunctionDef(name=function_name, params=params, expr=expr)
+
     args = self.parse_args()
 
     if name in {"translate", "rotate", "scale"}:
@@ -203,7 +266,7 @@ class Parser:
       if not isinstance(vals, list):
         raise ParseError("color() espera vetor [r,g,b] ou [r,g,b,a]")
       body = self.parse_body_items()
-      return ColorOp(rgba=[float(v) for v in vals], body=body)
+      return ColorOp(rgba=vals, body=body)
 
     if name in {"cube", "sphere", "cylinder"}:
       self.expect_symbol(";")

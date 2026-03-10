@@ -23,8 +23,9 @@ def main():
   root = Path(__file__).resolve().parent
   count_include = run_smoke(root / "sample_main_include.scad")
   count_use = run_smoke(root / "sample_main_use.scad")
+  count_functions = run_smoke(root / "sample_main_functions.scad")
 
-  if count_include <= 0 or count_use <= 0:
+  if count_include <= 0 or count_use <= 0 or count_functions <= 0:
     raise SystemExit(1)
 
   print("Smoke parser/evaluator OK")
