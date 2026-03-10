@@ -4,7 +4,9 @@ from .ast import (
   Assignment,
   BinaryExpr,
   BooleanOp,
+  Circle,
   ColorOp,
+  Extrude,
   ForStmt,
   FunctionCallExpr,
   FunctionDef,
@@ -15,10 +17,12 @@ from .ast import (
   ListComprehensionExpr,
   ModuleCall,
   ModuleDef,
+  Polygon,
   Primitive,
   Program,
   RangeExpr,
   RawCall,
+  Square,
   TernaryExpr,
   Transform,
   UnaryExpr,
@@ -454,6 +458,25 @@ class Parser:
     if name in {"cube", "sphere", "cylinder"}:
       self.expect_symbol(";")
       return Primitive(kind=name, args=args)
+
+    if name == "polygon":
+      self.expect_symbol(";")
+      points = args.get("arg0", args.get("points"))
+      paths = args.get("arg1", args.get("paths"))
+      return Polygon(points=points, paths=paths)
+
+    if name == "circle":
+      self.expect_symbol(";")
+      return Circle(args=args)
+
+    if name == "square":
+      self.expect_symbol(";")
+      return Square(args=args)
+
+    if name in {"linear_extrude", "rotate_extrude"}:
+      kind = "linear" if name == "linear_extrude" else "rotate"
+      body = self.parse_body_items()
+      return Extrude(kind=kind, args=args, body=body)
 
     if self.peek().kind == "symbol" and self.peek().value == ";":
       self.advance()

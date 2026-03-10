@@ -14,7 +14,7 @@ def run_smoke(source_file: Path) -> int:
   program = parse_scad(src)
   items = evaluate_program(program, source_path=str(source_file))
 
-  primitive_items = [i for i in items if i.node_type in {"primitive", "group", "boolean"}]
+  primitive_items = [i for i in items if i.node_type in {"primitive", "group", "boolean", "extrude", "polygon"}]
   print(f"{source_file.name}: {len(primitive_items)} item(ns) de avaliacao")
   return len(primitive_items)
 
@@ -33,6 +33,7 @@ def main():
   count_math_functions = run_smoke(root / "sample_math_functions.scad")
   count_trig_functions = run_smoke(root / "sample_trig_functions.scad")
   count_conversion = run_smoke(root / "sample_conversion.scad")
+  count_vectors_extrude = run_smoke(root / "sample_vectors_extrude.scad")
   count_hull_minkowski = run_smoke(root / "sample_hull_minkowski.scad")
 
   if (
@@ -48,6 +49,7 @@ def main():
     or count_math_functions <= 0
     or count_trig_functions <= 0
     or count_conversion <= 0
+    or count_vectors_extrude <= 0
     or count_hull_minkowski <= 0
   ):
     raise SystemExit(1)

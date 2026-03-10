@@ -134,6 +134,29 @@ class Transform(Node):
 
 
 @dataclass
+class Extrude(Node):
+  kind: str  # "linear" or "rotate"
+  args: dict[str, Any]
+  body: list[Node] = field(default_factory=list)
+
+
+@dataclass
+class Polygon(Node):
+  points: Any
+  paths: Any = None
+
+
+@dataclass
+class Circle(Node):
+  args: dict[str, Any]
+
+
+@dataclass
+class Square(Node):
+  args: dict[str, Any]
+
+
+@dataclass
 class BooleanOp(Node):
   kind: str
   body: list[Node] = field(default_factory=list)

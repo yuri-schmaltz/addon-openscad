@@ -8,8 +8,10 @@ from .ast import (
   Assignment,
   BinaryExpr,
   BooleanOp,
+  Circle,
   ColorOp,
   EvalItem,
+  Extrude,
   ForStmt,
   FunctionCallExpr,
   FunctionDef,
@@ -20,10 +22,12 @@ from .ast import (
   ListComprehensionExpr,
   ModuleCall,
   ModuleDef,
+  Polygon,
   Primitive,
   Program,
   RangeExpr,
   RawCall,
+  Square,
   TernaryExpr,
   Transform,
   UnaryExpr,
@@ -214,6 +218,43 @@ def _eval_function_call(expr: FunctionCallExpr, ctx: EvalContext):
     if resolved_args and isinstance(resolved_args[0], list):
       return resolved_args[0]
     return resolved_args if resolved_args else []
+  if expr.name == "concat":
+    result: list[object] = []
+    for arg in resolved_args:
+      if isinstance(arg, list):
+        result.extend(arg)
+      elif isinstance(arg, str):
+        result.append(arg)
+      else:
+        result.append(arg)
+    return result
+  if expr.name == "sort":
+    if resolved_args and isinstance(resolved_args[0], list):
+      lst = resolved_args[0]
+      try:
+        return sorted(lst, key=lambda v: float(v) if isinstance(v, (int, float)) else str(v))
+      except Exception:
+        return list(lst)
+    return []
+  if expr.name == "reverse":
+    if resolved_args and isinstance(resolved_args[0], list):
+      return list(reversed(resolved_args[0]))
+    return []
+  if expr.name == "norm":
+    if resolved_args and isinstance(resolved_args[0], list):
+      import math
+      nums = [float(v) for v in resolved_args[0] if isinstance(v, (int, float))]
+      return float(math.sqrt(sum(x * x for x in nums)))
+    return 0.0
+  if expr.name == "cross":
+    if len(resolved_args) >= 2:
+      a = resolved_args[0]
+      b = resolved_args[1]
+      if isinstance(a, list) and isinstance(b, list) and len(a) >= 3 and len(b) >= 3:
+        ax, ay, az = float(a[0]), float(a[1]), float(a[2])
+        bx, by, bz = float(b[0]), float(b[1]), float(b[2])
+        return [ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx]
+    return [0.0, 0.0, 0.0]
 
   fn = ctx.functions.get(expr.name)
   if fn is None:
@@ -529,6 +570,46 @@ def _eval_node(node, ctx: EvalContext, transform_chain=None, color=None):
 
   if isinstance(node, RawCall):
     return EvalItem(node_type="noop", transform_chain=transform_chain)
+
+  if isinstance(node, Polygon):
+    points = _resolve_value(node.points, ctx.variables, ctx) if node.points is not None else []
+    if not isinstance(points, list):
+      points = []
+    return EvalItem(
+      node_type="polygon",
+      transform_chain=transform_chain,
+      primitive=Primitive(kind="polygon", args={"points": points, "paths": node.paths}),
+      color=color,
+    )
+
+  if isinstance(node, Circle):
+    resolve = {k: _resolve_value(v, ctx.variables, ctx) for k, v in node.args.items()}
+    return EvalItem(
+      node_type="primitive",
+      transform_chain=transform_chain,
+      primitive=Primitive(kind="circle", args=resolve),
+      color=color,
+    )
+
+  if isinstance(node, Square):
+    resolve = {k: _resolve_value(v, ctx.variables, ctx) for k, v in node.args.items()}
+    return EvalItem(
+      node_type="primitive",
+      transform_chain=transform_chain,
+      primitive=Primitive(kind="square", args=resolve),
+      color=color,
+    )
+
+  if isinstance(node, Extrude):
+    resolve = {k: _resolve_value(v, ctx.variables, ctx) for k, v in node.args.items()}
+    child_items = [_eval_node(ch, ctx, transform_chain, color) for ch in node.body]
+    return EvalItem(
+      node_type="extrude",
+      transform_chain=transform_chain,
+      primitive=Primitive(kind=node.kind + "_extrude", args=resolve),
+      children=child_items,
+      color=color,
+    )
 
   return EvalItem(node_type="noop", transform_chain=transform_chain)
 

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 
 TOKEN_REGEX = re.compile(
-  r"\s*(?:(?P<number>\d+(?:\.\d+)?)|(?P<string>\"[^\"\\]*(?:\\.[^\"\\]*)*\")|(?P<ident>[A-Za-z_][A-Za-z0-9_]*)|(?P<symbol>[\[\]\{\}\(\),;=<>./\\\-+*%!&|?:]))"
+  r"(?P<number>\d+(?:\.\d+)?)|(?P<string>\"[^\"\\]*(?:\\.[^\"\\]*)*\")|(?P<ident>[A-Za-z_][A-Za-z0-9_]*)|(?P<symbol>[\[\]\{\}\(\),;=<>./\\\-+*%!&|?:])"
 )
 
 
@@ -26,6 +26,12 @@ def tokenize(source: str) -> list[Token]:
   n = len(source)
 
   while pos < n:
+    # Pular espaços em branco antes de qualquer verificação
+    while pos < n and source[pos] in ' \t\r\n':
+      pos += 1
+    if pos >= n:
+      break
+
     if source[pos:pos + 2] == "//":
       nl = source.find("\n", pos)
       if nl == -1:
@@ -35,9 +41,6 @@ def tokenize(source: str) -> list[Token]:
 
     m = TOKEN_REGEX.match(source, pos)
     if not m:
-      if source[pos].isspace():
-        pos += 1
-        continue
       raise TokenError(f"Token invalido na posicao {pos}: {source[pos:pos + 16]!r}")
 
     pos = m.end()
