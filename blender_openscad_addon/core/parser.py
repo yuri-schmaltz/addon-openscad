@@ -499,21 +499,25 @@ class Parser:
 
     if name in {"cube", "sphere", "cylinder"}:
       self.expect_symbol(";")
-      return Primitive(kind=name, args=args)
+      node = Primitive(kind=name, args=args)
+      return ModifierStmt(modifier=modifier, body=node) if modifier else node
 
     if name == "polygon":
       self.expect_symbol(";")
       points = args.get("arg0", args.get("points"))
       paths = args.get("arg1", args.get("paths"))
-      return Polygon(points=points, paths=paths)
+      node = Polygon(points=points, paths=paths)
+      return ModifierStmt(modifier=modifier, body=node) if modifier else node
 
     if name == "circle":
       self.expect_symbol(";")
-      return Circle(args=args)
+      node = Circle(args=args)
+      return ModifierStmt(modifier=modifier, body=node) if modifier else node
 
     if name == "square":
       self.expect_symbol(";")
-      return Square(args=args)
+      node = Square(args=args)
+      return ModifierStmt(modifier=modifier, body=node) if modifier else node
 
     if name in {"linear_extrude", "rotate_extrude"}:
       kind = "linear" if name == "linear_extrude" else "rotate"
