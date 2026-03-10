@@ -128,6 +128,33 @@ def _eval_function_call(expr: FunctionCallExpr, ctx: EvalContext):
     return max(resolved_args) if resolved_args else 0.0
   if expr.name == "abs":
     return abs(float(resolved_args[0])) if resolved_args else 0.0
+  if expr.name == "len":
+    if resolved_args and isinstance(resolved_args[0], (list, str)):
+      return float(len(resolved_args[0]))
+    return 0.0
+  if expr.name == "str":
+    if resolved_args:
+      val = resolved_args[0]
+      if isinstance(val, bool):
+        return "true" if val else "false"
+      if isinstance(val, str):
+        return val
+      if isinstance(val, (int, float)):
+        return str(val)
+      if isinstance(val, list):
+        return _format_value(val)
+    return ""
+  if expr.name == "lookup":
+    if len(resolved_args) >= 2:
+      key = resolved_args[0]
+      table = resolved_args[1]
+      if isinstance(table, list):
+        for item in table:
+          if isinstance(item, list) and len(item) >= 2:
+            if item[0] == key:
+              return item[1]
+      return 0.0
+    return 0.0
 
   fn = ctx.functions.get(expr.name)
   if fn is None:
