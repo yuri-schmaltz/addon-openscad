@@ -14,22 +14,31 @@ class OPENSCAD_PT_bridge_panel(bpy.types.Panel):
     layout = self.layout
     props = context.scene.openscad_bridge
 
-    col = layout.column(align=True)
-    col.prop(props, "text_block_name")
-    col.prop(props, "source_path")
+    # I/O Box
+    box = layout.box()
+    box.label(text="I/O Settings", icon='FILE_FOLDER')
+    col = box.column(align=True)
+    col.prop(props, "text_block_name", icon='TEXT')
+    col.prop(props, "source_path", icon='FILE_SCRIPT')
+    
+    # Build Settings Box
+    box = layout.box()
+    box.label(text="Build Settings", icon='MODIFIER')
+    col = box.column(align=True)
+    col.prop(props, "live_preview", icon='RESTRICT_VIEW_OFF')
+    col.prop(props, "apply_boolean_modifiers", icon='MOD_BOOLEAN')
+    col.prop(props, "fallback_segments", icon='MESH_CIRCLE')
 
-    col = layout.column(align=True)
-    col.prop(props, "live_preview")
-    col.prop(props, "apply_boolean_modifiers")
-    col.prop(props, "fallback_segments")
-
-    row = layout.row(align=True)
-    row.operator("openscad_bridge.import_file", text="Import SCAD")
-    row.operator("openscad_bridge.export_selected", text="Export SCAD")
-
-    row = layout.row(align=True)
-    row.operator("openscad_bridge.preview", text="Preview")
-    row.operator("openscad_bridge.render", text="Render")
+    # Actions Box
+    box = layout.box()
+    box.label(text="Actions", icon='PLAY')
+    row = box.row(align=True)
+    row.operator("openscad_bridge.import_file", text="Import SCAD", icon='IMPORT')
+    row.operator("openscad_bridge.export_selected", text="Export SCAD", icon='EXPORT')
+    
+    row = box.row(align=True)
+    row.operator("openscad_bridge.preview", text="Preview", icon='FILE_REFRESH')
+    row.operator("openscad_bridge.render", text="Render", icon='RENDER_STILL')
 
 
 class OPENSCAD_PT_bridge_text_editor_panel(bpy.types.Panel):
@@ -46,9 +55,11 @@ class OPENSCAD_PT_bridge_text_editor_panel(bpy.types.Panel):
     if context.space_data.text:
       props.text_block_name = context.space_data.text.name
 
-    layout.label(text="Text block atual para preview:")
-    layout.prop(props, "text_block_name", text="")
-    layout.operator("openscad_bridge.preview", text="Preview From Text")
+    box = layout.box()
+    box.label(text="Quick Preview", icon='RESTRICT_VIEW_OFF')
+    box.prop(props, "text_block_name", text="", icon='TEXT')
+    box.prop(props, "live_preview", icon='TIME')
+    box.operator("openscad_bridge.preview", text="Force Preview", icon='FILE_REFRESH')
 
 
 def register():

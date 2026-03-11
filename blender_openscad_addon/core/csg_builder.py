@@ -79,31 +79,60 @@ def _apply_color(obj: bpy.types.Object, color: list[float] | None) -> None:
       obj.data.materials.append(mat)
 
 
+def _get_fragments(r: float, args: dict) -> int:
+  fn = int(float(args.get("$fn", 0)))
+  if fn > 0:
+      return fn
+  
+  fa = float(args.get("$fa", 12.0))
+  fs = float(args.get("$fs", 2.0))
+  
+  # Minimum angle formula
+  fragments_angle = int(math.ceil(360.0 / fa)) if fa > 0 else 5
+  
+  # Minimum size formula
+  fragments_size = int(math.ceil(2 * math.pi * r / fs)) if fs > 0 else 5
+  
+  frag = max(fragments_angle, fragments_size)
+  # OpenSCAD min fragments is 5 by default
+  return max(5, frag)
+
 def _build_primitive(coll: bpy.types.Collection, primitive: Primitive, transform_chain, color):
   kind = primitive.kind
   args = primitive.args
 
   if kind == "cube":
     size = args.get("size", args.get("arg0", [1.0, 1.0, 1.0]))
+    center = args.get("center", False)
     if isinstance(size, (int, float)):
       size = [float(size), float(size), float(size)]
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0))
     obj = bpy.context.active_object
     obj.scale = (float(size[0]) / 2.0, float(size[1]) / 2.0, float(size[2]) / 2.0)
+    
+    if not center:
+      # If center=false, OpenSCAD aligns the cube's corner at 0,0,0
+      obj.location = (obj.scale.x, obj.scale.y, obj.scale.z)
   elif kind == "sphere":
     r = float(args.get("r", args.get("arg0", 1.0)))
-    fn = int(float(args.get("$fn", 32))) or 32
-    # OpenSCAD subdivide spheres evenly, minimal 3 segments.
+    fn = _get_fragments(r, args)
     segments = max(4, fn)
     rings = max(4, fn // 2)
     bpy.ops.mesh.primitive_uv_sphere_add(radius=r, segments=segments, ring_count=rings, location=(0, 0, 0))
     obj = bpy.context.active_object
   elif kind == "cylinder":
     h = float(args.get("h", args.get("arg0", 1.0)))
-    r = float(args.get("r", args.get("arg1", 1.0)))
-    fn = int(float(args.get("$fn", 32))) or 32
+    r1 = float(args.get("r1", args.get("r", args.get("arg1", 1.0))))
+    # OpenSCAD can also specify r2, fallback to r1 if missing
+    r2 = float(args.get("r2", r1))
+    center = args.get("center", False)
+    
+    fn = _get_fragments(max(r1, r2), args)
     segments = max(3, fn)
-    bpy.ops.mesh.primitive_cylinder_add(vertices=segments, radius=r, depth=h, location=(0, 0, h / 2.0))
+    
+    # Cylinder in Blender requires building from cone to support r1/r2
+    z_offset = 0 if center else h / 2.0
+    bpy.ops.mesh.primitive_cone_add(vertices=segments, radius1=r1, radius2=r2, depth=h, location=(0, 0, z_offset))
     obj = bpy.context.active_object
   elif kind == "polygon":
     pts = args.get("points", [])
@@ -122,7 +151,7 @@ def _build_primitive(coll: bpy.types.Collection, primitive: Primitive, transform
     obj = bpy.data.objects.new("OpenSCAD_Polygon", me)
   elif kind == "circle":
     r = float(args.get("r", args.get("arg0", 1.0)))
-    fn = int(float(args.get("$fn", 32))) or 32
+    fn = _get_fragments(r, args)
     bm = bmesh.new()
     verts = [bm.verts.new((r * cos(2 * pi * i / fn), r * sin(2 * pi * i / fn), 0.0)) for i in range(fn)]
     bm.faces.new(verts)
@@ -206,8 +235,7 @@ def _build_primitive(coll: bpy.types.Collection, primitive: Primitive, transform
 
 
 def _compose_boolean(base: bpy.types.Object, other: bpy.types.Object, kind: str) -> bpy.types.Object:
-  if kind == "hull":
-    # 1. Copia o obj base + target pra Meshes temporarios aplicando os modifiers  
+  if kind == "hull" or kind == "minkowski":
     depsgraph = bpy.context.evaluated_depsgraph_get()
     
     base_eval = base.evaluated_get(depsgraph)
@@ -215,30 +243,44 @@ def _compose_boolean(base: bpy.types.Object, other: bpy.types.Object, kind: str)
     other_eval = other.evaluated_get(depsgraph)
     me_b = bpy.data.meshes.new_from_object(other_eval)
     
-    # 2. Fundir vertices no espaco global numa base limpa
-    bm = bmesh.new()
-    bm.from_mesh(me_a)
-    bmesh.ops.transform(bm, matrix=base.matrix_world, verts=bm.verts)
+    bm_a = bmesh.new()
+    bm_a.from_mesh(me_a)
+    bmesh.ops.transform(bm_a, matrix=base.matrix_world, verts=bm_a.verts)
     
     bm_b = bmesh.new()
     bm_b.from_mesh(me_b)
     bmesh.ops.transform(bm_b, matrix=other.matrix_world, verts=bm_b.verts)
     
-    for v in bm_b.verts:
-      bm.verts.new(v.co)
+    bm_result = bmesh.new()
+    
+    if kind == "hull":
+      for v in bm_a.verts:
+        bm_result.verts.new(v.co)
+      for v in bm_b.verts:
+        bm_result.verts.new(v.co)
+    else:
+      # Minkowski Sum: For each vertex in A, add each vertex in B
+      # Then convex hull the result
+      # Note: This is a convex minkowski sum approximation which is standard
+      # for polyhedron-polyhedron minkowski where they are convex. 
+      # Full non-convex minkowski is extremely complex CSG.
+      for va in bm_a.verts:
+        for vb in bm_b.verts:
+          bm_result.verts.new(va.co + vb.co)
+
+    bmesh.ops.convex_hull(bm_result, kdop_margin=0.0)
+    
+    # Mapear de volta a matriz do base
+    bmesh.ops.transform(bm_result, matrix=base.matrix_world.inverted(), verts=bm_result.verts)
+    
+    bm_result.to_mesh(base.data)
+    
+    bm_a.free()
     bm_b.free()
-    
-    # 3. Criar Convex Hull
-    bmesh.ops.convex_hull(bm, kdop_margin=0.0)
-    
-    # Mapear de volta matriz de origem
-    bmesh.ops.transform(bm, matrix=base.matrix_world.inverted(), verts=bm.verts)
-    bm.to_mesh(base.data)
-    bm.free()
+    bm_result.free()
     bpy.data.meshes.remove(me_a)
     bpy.data.meshes.remove(me_b)
     
-    # Limpar modifiers se existirem (agora é poligonal purista)
     for mod in base.modifiers:
         base.modifiers.remove(mod)
 
@@ -250,7 +292,6 @@ def _compose_boolean(base: bpy.types.Object, other: bpy.types.Object, kind: str)
     "union": "UNION",
     "difference": "DIFFERENCE",
     "intersection": "INTERSECT",
-    "minkowski": "UNION",
   }
   mod = base.modifiers.new(name=f"OpenSCAD_{kind}", type="BOOLEAN")
   mod.operation = op_map.get(kind, "UNION")

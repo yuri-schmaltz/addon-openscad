@@ -63,9 +63,17 @@ def _apply_scad_highlight():
         
         # Como a API de text color do Blender é super restrita e nao permite pintar 
         # substrings via scripting diretamente na v1, a adocao basica sera alterar
-        # a sintaxe format global do text viewer se ele focar neste bloco
-        pass
-
+        # a sintaxe format global do text viewer ativando flag 'is_syntax_highlight_supported'.
+        # O Blender usa built-in Py/C rules para textos.
+        try:
+            for area in bpy.context.window.screen.areas:
+                if area.type == 'TEXT_EDITOR':
+                    for space in area.spaces:
+                        if space.type == 'TEXT_EDITOR':
+                            if space.text == text_block:
+                                space.show_syntax_highlight = True
+        except Exception:
+            pass
 
 @persistent
 def update_scad_syntax_timer():

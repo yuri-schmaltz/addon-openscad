@@ -19,8 +19,12 @@ class OpenSCADAddonProperties(bpy.types.PropertyGroup):
 
   live_preview: bpy.props.BoolProperty(
     name="Live Preview",
-    description="Executa preview automatico ao importar",
+    description="Executa preview automatico ao digitar",
     default=True,
+  )
+
+  last_text_hash: bpy.props.StringProperty(
+    default="",
   )
 
   apply_boolean_modifiers: bpy.props.BoolProperty(

@@ -42,9 +42,41 @@ class OPENSCAD_OT_preview(bpy.types.Operator):
     return {"FINISHED"}
 
 
+def _check_live_preview():
+  context = bpy.context
+  if not hasattr(context, "scene") or not hasattr(context.scene, "openscad_bridge"):
+    return 1.0
+    
+  props = context.scene.openscad_bridge
+  if not props.live_preview or not props.text_block_name:
+    return 1.0
+
+  text = bpy.data.texts.get(props.text_block_name)
+  if not text:
+    return 1.0
+    
+  current_text = text.as_string()
+  import hashlib
+  current_hash = hashlib.md5(current_text.encode('utf-8')).hexdigest()
+  
+  if current_hash != props.last_text_hash:
+    props.last_text_hash = current_hash
+    # Update on change
+    try:
+      bpy.ops.openscad_bridge.preview('INVOKE_DEFAULT')
+    except Exception:
+      pass
+
+  return 1.0
+
+
 def register():
   bpy.utils.register_class(OPENSCAD_OT_preview)
+  if not bpy.app.timers.is_registered(_check_live_preview):
+    bpy.app.timers.register(_check_live_preview)
 
 
 def unregister():
+  if bpy.app.timers.is_registered(_check_live_preview):
+    bpy.app.timers.unregister(_check_live_preview)
   bpy.utils.unregister_class(OPENSCAD_OT_preview)
