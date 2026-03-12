@@ -36,7 +36,6 @@ class OPENSCAD_OT_preview(bpy.types.Operator):
       self.report({"WARNING"}, "Nenhum arquivo/texto valido para gerar OpenSCAD.")
       return {"CANCELLED"}
 
-    source = text.as_string()
     try:
       program = parse_scad(source)
       source_path = props.source_path or None

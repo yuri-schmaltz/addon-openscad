@@ -31,8 +31,10 @@ def register():
     export_scad.register()
     preview_scad.register()
     render_scad.register()
+    quick_insert.register()
 
 def unregister():
+    quick_insert.unregister()
     render_scad.unregister()
     preview_scad.unregister()
     export_scad.unregister()

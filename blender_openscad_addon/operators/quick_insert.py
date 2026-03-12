@@ -50,9 +50,12 @@ class OPENSCAD_OT_quick_insert(bpy.types.Operator):
   def draw(self, context):
     layout = self.layout
     layout.label(text="OpenSCAD Script:", icon='TEXT')
-    # Using layout.prop with text="" to use the full width
-    # and a big layout using text formatting
-    layout.prop(self, "script_content", text="")
+    
+    # Create a column for the text box and expand its vertical scale
+    # to behave like a textarea instead of a single-line string input.
+    col = layout.column()
+    col.scale_y = 15.0  # Make it 15 lines tall
+    col.prop(self, "script_content", text="")
 
 
 def register():
