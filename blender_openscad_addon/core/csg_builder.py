@@ -293,9 +293,11 @@ def _compose_boolean(base: bpy.types.Object, other: bpy.types.Object, kind: str)
     "difference": "DIFFERENCE",
     "intersection": "INTERSECT",
   }
-  mod = base.modifiers.new(name=f"OpenSCAD_{kind}", type="BOOLEAN")
+  mod = base.modifiers.new(name=f"OSCAD_{kind}_{other.name}", type="BOOLEAN")
   mod.operation = op_map.get(kind, "UNION")
   mod.object = other
+  # Ensure the modifier runs exactly where the other object is
+  mod.solver = 'EXACT'
   other.hide_set(True)
   other.hide_render = True
   return base
@@ -336,15 +338,29 @@ def _build_eval_item(coll, item):
     elif "rotate_extrude" in kind or kind == "rotate_extrude":
       angle = float(args.get("angle", 360.0))
       steps = int(float(args.get("$fn", 32))) or 32
+      
+      # In OpenSCAD, rotate_extrude spins a 2D XY shape around the Y axis (or Z depending on view).
+      # The distance from the Y axis becomes the radius.
+      # If the node has child transforms (like translate), we must apply them *first* 
+      # to the mesh vertices before spinning, so the origin remains at 0,0,0.
+      _apply_transform_chain(base, item.transform_chain)
+      # Clear the chain so we don't apply it again at the end of _build_eval_item
+      item.transform_chain = []
+      
+      # Apply the transformation to the mesh data itself, leaving object origin at global 0,0,0
+      bpy.context.view_layer.objects.active = base
       bpy.ops.object.select_all(action='DESELECT')
       base.select_set(True)
-      bpy.context.view_layer.objects.active = base
+      bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+      
+      # Now apply the screw modifier around the origin
       screw_mod = base.modifiers.new("OpenSCAD_RotExtrude", type="SCREW")
       screw_mod.angle = math.radians(angle)
       screw_mod.steps = steps
       screw_mod.iterations = 1
       screw_mod.axis = 'Y'
-    _apply_transform_chain(base, item.transform_chain)
+    if item.transform_chain:
+      _apply_transform_chain(base, item.transform_chain)
     _apply_color(base, item.color)
     return base
 
@@ -420,13 +436,25 @@ def _build_eval_item(coll, item):
     objs = [o for o in (_build_eval_item(coll, ch) for ch in item.children) if o is not None]
     if not objs:
       return None
+      
     base = objs[0]
+    kind = item.boolean_kind or "union"
+    others = objs[1:]
     
-    # Bypass linter estatico para sublistas tipadas em tempo_de_compilacao
-    others: list[bpy.types.Object] = objs[1:]  # type: ignore
-    
-    for other in others:
-      base = _compose_boolean(base, other, item.boolean_kind or "union")
+    # In OpenSCAD, union combines all. Difference subtracts ALL following objects from the first.
+    # Intersection intersects ALL objects.
+    if kind == "union" and len(objs) > 1:
+      # If it's a union, we can just apply boolean union to the base sequentially
+      for other in others:
+        base = _compose_boolean(base, other, "union")
+    elif kind == "difference" and len(objs) > 1:
+      # Difference subtracts all subsequent objects from the first one
+      for other in others:
+        base = _compose_boolean(base, other, "difference")
+    elif kind == "intersection" and len(objs) > 1:
+      for other in others:
+        base = _compose_boolean(base, other, "intersection")
+        
     return base
 
   return None
