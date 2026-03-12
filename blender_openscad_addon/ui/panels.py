@@ -19,10 +19,17 @@ class OPENSCAD_PT_bridge_panel(bpy.types.Panel):
     box.label(text="I/O Settings", icon='FILE_FOLDER')
     
     col = box.column(align=True)
-    row = col.row(align=True)
-    row.prop(props, "text_block_name", icon='TEXT')
-    row.operator("openscad_bridge.quick_insert", text="", icon='GREASEPENCIL')
     
+    # Try a completely different layout strategy to guarantee button visibility
+    row = col.row(align=True)
+    row.prop(props, "text_block_name", text="SCAD Text")
+    
+    # Put the operator on its own row immediately below if side-by-side fails,
+    # but let's try one more side-by-side strategy: putting the button outside a strict aligned row
+    insert_row = col.row()
+    insert_row.operator("openscad_bridge.quick_insert", text="Quick Edit SCAD Script", icon='GREASEPENCIL')
+    
+    col.separator()
     col.prop(props, "source_path", icon='FILE_SCRIPT')
     
     # Build Settings Box
